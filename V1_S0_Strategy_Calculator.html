@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>S0 策略灰度计算器</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: #DCD8D1;
+            min-height: 100vh;
+            padding: 24px;
+            color: #262727;
+        }
+
+        .app-shell {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: #F6F4EF;
+            border-radius: 34px;
+            padding: 22px;
+            box-shadow: 0 16px 46px rgba(46, 39, 28, 0.12);
+            display: grid;
+            grid-template-columns: 86px 1fr;
+            gap: 20px;
+        }
+
+        .side-nav {
+            background: #F8F6F2;
+            border: 1px solid rgba(55, 52, 45, 0.06);
+            border-radius: 26px;
+            padding: 14px 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+        }
+        .side-logo {
+            width: 48px;
+            height: 48px;
+            border-radius: 14px;
+            background: #11131E;
+            color: #F8D351;
+            font-size: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 10px;
+            box-shadow: 0 8px 18px rgba(17, 19, 30, 0.35);
+        }
+        .side-item {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            border: none;
+            background: #EFEBE3;
+            color: #5F5D56;
+            font-size: 17px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .side-item.active {
+            background: #1E2232;
+            color: #F7D452;
+            box-shadow: 0 8px 16px rgba(20, 25, 39, 0.28);
+        }
+        .side-item:hover {
+            transform: translateY(-1px);
+            background: #E7E1D7;
+        }
+        .side-spacer { flex: 1; }
+
+        .main {
+            min-width: 0;
+        }
+
+        /* ── 页头 ── */
+        .page-header {
+            background: #F6F4EF;
+            border-radius: 24px;
+            padding: 6px 4px 18px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+        }
+        .page-header-left h1 {
+            color: #1F2024;
+            font-size: 34px;
+            font-weight: 700;
+            letter-spacing: 0.2px;
+        }
+        .page-header-left p {
+            color: #8E8C84;
+            font-size: 14px;
+            margin-top: 7px;
+        }
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .search-pill {
+            min-width: 280px;
+            background: #FBF9F4;
+            border: 1px solid #EAE4D8;
+            border-radius: 999px;
+            padding: 10px 18px;
+            color: #A6A39B;
+            font-size: 13px;
+        }
+        .total-badge {
+            background: #191D2C;
+            color: #FDFCF8;
+            font-weight: 700;
+            font-size: 13px;
+            padding: 10px 22px;
+            border-radius: 999px;
+            white-space: nowrap;
+        }
+        .total-badge.invalid {
+            background: #D95C5C;
+            color: #fff;
+        }
+
+        /* ── 大组灰度控制栏 ── */
+        .groups-bar {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 14px;
+            margin-bottom: 22px;
+        }
+        .group-bar-card {
+            background: #FBF9F4;
+            border-radius: 20px;
+            padding: 18px 20px;
+            border: 1px solid #EFE8DB;
+            box-shadow: 0 8px 22px rgba(69, 62, 45, 0.08);
+        }
+        .group-bar-card .gb-label {
+            font-size: 13px;
+            color: #928F88;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            flex-shrink: 0;
+        }
+        .group-bar-card .gb-pct {
+            font-size: 38px;
+            font-weight: 800;
+            line-height: 1;
+            margin-bottom: 14px;
+        }
+        /* slider track wrapper */
+        .slider-wrap {
+            position: relative;
+            height: 8px;
+        }
+        .slider-track-bg {
+            position: absolute;
+            inset: 0;
+            border-radius: 4px;
+            background: #EDE8DD;
+        }
+        .slider-track-fill {
+            position: absolute;
+            top: 0; left: 0; bottom: 0;
+            border-radius: 4px;
+            transition: width 0.1s;
+        }
+        input[type="range"].styled-range {
+            position: absolute;
+            inset: -6px 0;
+            width: 100%;
+            height: 20px;
+            -webkit-appearance: none;
+            background: transparent;
+            cursor: pointer;
+            z-index: 2;
+        }
+        input[type="range"].styled-range::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 3px solid #fff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        input[type="range"].styled-range:active::-webkit-slider-thumb {
+            transform: scale(1.15);
+        }
+
+        /* group accent colors */
+        .accent-green  { color: #8B7A47; }
+        .accent-blue   { color: #7488A6; }
+        .accent-amber  { color: #CF7044; }
+        .bg-green  { background: #E5C560; }
+        .bg-blue   { background: #7589A6; }
+        .bg-amber  { background: #D57B50; }
+        .thumb-green::-webkit-slider-thumb  { background: #E5C560; }
+        .thumb-blue::-webkit-slider-thumb   { background: #7589A6; }
+        .thumb-amber::-webkit-slider-thumb  { background: #D57B50; }
+
+        /* ── 大组详情卡片 ── */
+        .group-detail-card {
+            background: #FBF9F4;
+            border-radius: 24px;
+            padding: 24px 28px;
+            margin-bottom: 16px;
+            border: 1px solid #EFE8DB;
+            box-shadow: 0 8px 22px rgba(69, 62, 45, 0.08);
+        }
+        .gd-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .gd-icon {
+            width: 38px; height: 38px;
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+        .gd-icon.green  { background: #F5EFD8; color: #8D7840; }
+        .gd-icon.blue   { background: #EBEFF5; color: #6C819E; }
+        .gd-icon.amber  { background: #F7E9E1; color: #C56D49; }
+        .gd-title {
+            font-size: 17px;
+            font-weight: 700;
+            color: #26272E;
+        }
+        .gd-sub {
+            font-size: 12px;
+            color: #A29F97;
+            margin-top: 2px;
+        }
+
+        /* 表格 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        thead th {
+            color: #AAA;
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 0 10px 12px;
+            text-align: center;
+            border-bottom: 1px solid #EFE8DB;
+        }
+        thead th:first-child { text-align: left; }
+        tbody tr {
+            transition: background 0.15s;
+        }
+        tbody tr:hover td { background: #F6F3EC; }
+        tbody td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #F0EADD;
+            vertical-align: middle;
+            text-align: center;
+        }
+        tbody td:first-child {
+            text-align: left;
+            font-weight: 600;
+            color: #2E2E2D;
+        }
+        tbody tr:last-child td { border-bottom: none; }
+
+        /* 指标输入框 */
+        .metric-input {
+            width: 70px;
+            padding: 6px 8px;
+            border: 1px solid #E7DFD0;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 13px;
+            color: #333;
+            background: #F5F2EA;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            outline: none;
+        }
+        .metric-input:focus {
+            border-color: #7188AA;
+            box-shadow: 0 0 0 3px rgba(113,136,170,0.14);
+            background: #fff;
+        }
+
+        /* 组内占比滑块列 */
+        .sub-pct-cell {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            justify-content: center;
+        }
+        .sub-pct-cell .sub-pct-val {
+            min-width: 36px;
+            font-weight: 700;
+            font-size: 13px;
+            color: #555;
+            text-align: right;
+        }
+        .sub-slider-wrap {
+            position: relative;
+            width: 90px;
+            height: 6px;
+            flex-shrink: 0;
+        }
+        .sub-track-bg {
+            position: absolute; inset: 0;
+            border-radius: 3px;
+            background: #EDE8DD;
+        }
+        .sub-track-fill {
+            position: absolute; top:0; left:0; bottom:0;
+            border-radius: 3px;
+        }
+        input[type="range"].sub-range {
+            position: absolute;
+            inset: -7px 0;
+            width: 100%;
+            height: 20px;
+            -webkit-appearance: none;
+            background: transparent;
+            cursor: pointer;
+            z-index: 2;
+        }
+        input[type="range"].sub-range::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px; height: 16px;
+            border-radius: 50%;
+            border: 2.5px solid #fff;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.18);
+            cursor: pointer;
+        }
+        .sub-thumb-green::-webkit-slider-thumb { background: #E5C560; }
+        .sub-thumb-blue::-webkit-slider-thumb  { background: #7589A6; }
+        .sub-thumb-amber::-webkit-slider-thumb { background: #D57B50; }
+
+        /* ── 结果面板 ── */
+        .results-panel {
+            background: #1E2232;
+            border-radius: 24px;
+            padding: 28px 32px;
+            margin-top: 8px;
+            box-shadow: 0 14px 28px rgba(22, 25, 38, 0.3);
+        }
+        .results-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+        }
+        .results-panel-header h2 {
+            color: #fff;
+            font-size: 16px;
+            font-weight: 700;
+        }
+        .results-panel-header span {
+            font-size: 12px;
+            color: #777F94;
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+        }
+        .metric-card {
+            background: #292E42;
+            border-radius: 16px;
+            padding: 20px 18px;
+        }
+        .metric-card .mc-label {
+            font-size: 11px;
+            color: #8E95A8;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+        }
+        .metric-card .mc-value {
+            font-size: 30px;
+            font-weight: 800;
+            color: #fff;
+            line-height: 1;
+        }
+        .metric-card .mc-unit {
+            font-size: 14px;
+            font-weight: 400;
+            color: #AAA;
+            margin-left: 2px;
+        }
+        .metric-card.highlight { background: #E6C561; }
+        .metric-card.highlight .mc-label { color: rgba(35,33,28,0.62); }
+        .metric-card.highlight .mc-value { color: #1B1B1D; }
+        .metric-card.highlight .mc-unit  { color: rgba(35,33,28,0.52); }
+
+        .formula-note {
+            color: #8B877F;
+            font-size: 11px;
+            margin-top: 18px;
+            text-align: center;
+            letter-spacing: 0.3px;
+        }
+
+        /* 全量占比徽章 */
+        .allpct-badge {
+            display: inline-block;
+            background: #EFE8DC;
+            color: #5F5B53;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 20px;
+            min-width: 52px;
+            text-align: center;
+        }
+
+        @media (max-width: 1100px) {
+            .app-shell {
+                grid-template-columns: 1fr;
+                padding: 16px;
+            }
+            .side-nav {
+                flex-direction: row;
+                justify-content: center;
+                border-radius: 18px;
+            }
+            .side-spacer { display: none; }
+            .page-header {
+                flex-wrap: wrap;
+            }
+            .header-actions {
+                width: 100%;
+                justify-content: space-between;
+            }
+            .search-pill {
+                min-width: 0;
+                flex: 1;
+            }
+            .groups-bar {
+                grid-template-columns: 1fr;
+            }
+            .metrics-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 640px) {
+            body { padding: 12px; }
+            .page-header-left h1 { font-size: 28px; }
+            .metrics-grid { grid-template-columns: 1fr; }
+            .results-panel, .group-detail-card { padding: 18px; }
+        }
+    </style>
+</head>
+<body>
+<div class="app-shell">
+    <aside class="side-nav">
+        <div class="side-logo">S</div>
+        <button class="side-item active" type="button">&#9679;</button>
+        <button class="side-item" type="button">&#8981;</button>
+        <button class="side-item" type="button">&#9633;</button>
+        <button class="side-item" type="button">&#9881;</button>
+        <div class="side-spacer"></div>
+        <button class="side-item" type="button">&#9786;</button>
+    </aside>
+
+    <main class="main">
+    <!-- 页头 -->
+    <div class="page-header">
+        <div class="page-header-left">
+            <h1>Hi，S0 团队</h1>
+            <p>S0 策略灰度计算器 · 调整配比并实时观察综合指标</p>
+        </div>
+        <div class="header-actions">
+            <div class="search-pill">Search strategy / metric...</div>
+            <div class="total-badge" id="total-badge">总灰度 100% ✓</div>
+        </div>
+    </div>
+
+    <!-- 结果面板 -->
+    <div class="results-panel" style="margin-bottom:28px;">
+        <div class="results-panel-header">
+            <h2>预计指标</h2>
+            <span>SUMPRODUCT(大组灰度 × 子行动占比 × 子行动指标)</span>
+        </div>
+        <div class="metrics-grid">
+            <div class="metric-card highlight">
+                <div class="mc-label">DPD30 率</div>
+                <div class="mc-value" id="result-dpd30">—<span class="mc-unit">%</span></div>
+            </div>
+            <div class="metric-card">
+                <div class="mc-label">复贷率</div>
+                <div class="mc-value" id="result-fudai">—<span class="mc-unit">%</span></div>
+            </div>
+            <div class="metric-card">
+                <div class="mc-label">所需 S0 人力</div>
+                <div class="mc-value" id="result-s0">—</div>
+            </div>
+            <div class="metric-card">
+                <div class="mc-label">所需 S1 人力</div>
+                <div class="mc-value" id="result-s1">—</div>
+            </div>
+        </div>
+        <div class="formula-note">* 指标留空时不参与计算 · 大组灰度总和须 = 100%</div>
+    </div>
+
+    <!-- 大组灰度控制栏 -->
+    <div class="groups-bar">
+
+        <div class="group-bar-card">
+            <div class="gb-label"><span class="dot bg-green"></span>不催</div>
+            <div class="gb-pct accent-green" id="value-不催">33%</div>
+            <div class="slider-wrap">
+                <div class="slider-track-bg"></div>
+                <div class="slider-track-fill bg-green" id="fill-不催" style="width:33%"></div>
+                <input type="range" class="styled-range thumb-green"
+                    id="group-不催" min="0" max="100" value="33"
+                    oninput="adjustGroup('不催')">
+            </div>
+        </div>
+
+        <div class="group-bar-card">
+            <div class="gb-label"><span class="dot bg-blue"></span>仅AI催</div>
+            <div class="gb-pct accent-blue" id="value-仅AI催">34%</div>
+            <div class="slider-wrap">
+                <div class="slider-track-bg"></div>
+                <div class="slider-track-fill bg-blue" id="fill-仅AI催" style="width:34%"></div>
+                <input type="range" class="styled-range thumb-blue"
+                    id="group-仅AI催" min="0" max="100" value="34"
+                    oninput="adjustGroup('仅AI催')">
+            </div>
+        </div>
+
+        <div class="group-bar-card">
+            <div class="gb-label"><span class="dot bg-amber"></span>有人工介入</div>
+            <div class="gb-pct accent-amber" id="value-有人工介入">33%</div>
+            <div class="slider-wrap">
+                <div class="slider-track-bg"></div>
+                <div class="slider-track-fill bg-amber" id="fill-有人工介入" style="width:33%"></div>
+                <input type="range" class="styled-range thumb-amber"
+                    id="group-有人工介入" min="0" max="100" value="33"
+                    oninput="adjustGroup('有人工介入')">
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 不催 详情 -->
+    <div class="group-detail-card">
+        <div class="gd-header">
+            <div class="gd-icon green">&#128683;</div>
+            <div>
+                <div class="gd-title">不催</div>
+                <div class="gd-sub">1 个子行动</div>
+            </div>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>子行动</th>
+                    <th>DPD30 (%)</th>
+                    <th>复贷 (%)</th>
+                    <th>S0 人力</th>
+                    <th>S1 人力</th>
+                    <th>组内占比</th>
+                    <th>全量占比</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>不催（对照）</td>
+                    <td><input type="number" class="metric-input" id="dpd30-不催1" value="" placeholder="—" step="0.1" oninput="calc()"></td>
+                    <td><input type="number" class="metric-input" id="fudai-不催1" value="" placeholder="—" step="0.1" oninput="calc()"></td>
+                    <td><input type="number" class="metric-input" id="s0-不催1" value="" placeholder="—" step="0.1" oninput="calc()"></td>
+                    <td><input type="number" class="metric-input" id="s1-不催1" value="" placeholder="—" step="0.1" oninput="calc()"></td>
+                    <td>
+                        <div class="sub-pct-cell">
+                            <div class="sub-slider-wrap">
+                                <div class="sub-track-bg"></div>
+                                <div class="sub-track-fill bg-green" id="subfill-不催1" style="width:100%"></div>
+                                <input type="range" class="sub-range sub-thumb-green" id="sub-不催1" min="0" max="100" value="100" oninput="adjustSub('不催', '不催1')">
+                            </div>
+                            <span class="sub-pct-val accent-green" id="subval-不催1">100%</span>
+                        </div>
+                    </td>
+                    <td><span class="allpct-badge" id="allpct-不催1">—</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 仅AI催 详情 -->
+    <div class="group-detail-card">
+        <div class="gd-header">
+            <div class="gd-icon blue">&#129302;</div>
+            <div>
+                <div class="gd-title">仅 AI 催</div>
+                <div class="gd-sub">2 个子行动</div>
+            </div>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>子行动</th>
+                    <th>DPD30 (%)</th>
+                    <th>复贷 (%)</th>
+                    <th>S0 人力</th>
+                    <th>S1 人力</th>
+                    <th>组内占比</th>
+                    <th>全量占比</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>AI 提醒-轻度</td>
+                    <td><input type="number" class="metric-input" id="dpd30-AI轻度" value="" placeholder="—" step="0.1" oninput="calc()"></td>
+                    <td><input type="number" class="metric-input" id="fudai-AI轻度" value="" placeholder="—" step="0.1" oninput="calc()"></td>
+                    <td><input type="number" class="metric-input" id="s0-AI轻度" value="" placeholder="—" step="0.1" oninput="calc()"></td>
+                    <td><input type="number" class="metric-input" id="s1-AI轻度" value="" placeholder="—" step="0.1" oninput="calc()"></td>
+                    <td>
+                        <div class="sub-pct-cell">
+                            <div class="sub-slider-wrap">
+                                <div class="sub-track-bg"></div>
+                                <div class="sub-track-fill bg-blue" id="subfill-AI轻度" style="width:50%"></div>
+                                <input type="range" class="sub-range sub-thumb-blue" id="sub-AI轻度" min="0" max="100" value="50" oninput="adjustSub('仅AI催', 'AI轻度')">
+                            </div>
+                            <span class="sub-pct-val accent-blue" id="subval-AI轻度">50%</span>
+                        </div>
+                    </td>
+                    <td><span class="allpct-badge" id="allpct-AI轻度">—</span></td>
+                </tr>
+                <tr>
+                    <td>AI 提醒-重度</td>
+                    <td><input type="number" class="metric-input" id="dpd30-AI重度" value="" placeholder="—" step="0.1" oninput="calc()"></td>
+                    <td><input type="number" class="metric-input" id="fudai-AI重度" value="" placeholder="—" step="0.1" oninput="calc()"></td>
+                    <td><input type="number" class="metric-input" id="s0-AI重度" value="" placeholder="—" step="0.1" oninput="calc()"></td>
+                    <td><input type="number" class="metric-input" id="s1-AI重度" value="" placeholder="—" step="0.1" oninput="calc()"></td>
+                    <td>
+                        <div class="sub-pct-cell">
+                            <div class="sub-slider-wrap">
+                                <div class="sub-track-bg"></div>
+                                <div class="sub-track-fill bg-blue" id="subfill-AI重度" style="width:50%"></div>
+                                <input type="range" class="sub-range sub-thumb-blue" id="sub-AI重度" min="0" max="100" value="50" oninput="adjustSub('仅AI催', 'AI重度')">
+                            </div>
+                            <span class="sub-pct-val accent-blue" id="subval-AI重度">50%</span>
+                        </div>
+                    </td>
+                    <td><span class="allpct-badge" id="allpct-AI重度">—</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 有人工介入 详情 -->
+    <div class="group-detail-card">
+        <div class="gd-header">
+            <div class="gd-icon amber">&#128100;</div>
+            <div>
+                <div class="gd-title">有人工介入</div>
+                <div class="gd-sub">3 个子行动</div>
+            </div>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>子行动</th>
+                    <th>DPD30 (%)</th>
+                    <th>复贷 (%)</th>
+                    <th>S0 人力</th>
+                    <th>S1 人力</th>
+                    <th>组内占比</th>
+                    <th>全量占比</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>AI + 人工-简单</td>
+                    <td><input type="number" class="metric-input" id="dpd30-人工简单" value="" placeholder="—" step="0.1" oninput="calc()"></td>
+                    <td><input type="number" class="metric-input" id="fudai-人工简单" value="" placeholder="—" step="0.1" oninput="calc()"></td>
+                    <td><input type="number" class="metric-input" id="s0-人工简单" value="" placeholder="—" step="0.1" oninput="calc()"></td>
+                    <td><input type="number" class="metric-input" id="s1-人工简单" value="" placeholder="—" step="0.1" oninput="calc()"></td>
+                    <td>
+                        <div class="sub-pct-cell">
+                            <div class="sub-slider-wrap">
+                                <div class="sub-track-bg"></div>
+                                <div class="sub-track-fill bg-amber" id="subfill-人工简单" style="width:33%"></div>
+                                <input type="range" class="sub-range sub-thumb-amber" id="sub-人工简单" min="0" max="100" value="33" oninput="adjustSub('有人工介入', '人工简单')">
+                            </div>
+                            <span class="sub-pct-val accent-amber" id="subval-人工简单">33%</span>
+                        </div>
+                    </td>
+                    <td><span class="allpct-badge" id="allpct-人工简单">—</span></td>
+                </tr>
+                <tr>
+                    <td>AI + 人工-复杂</td>
+                    <td><input type="number" class="metric-input" id="dpd30-人工复杂" value="" placeholder="—" step="0.1" oninput="calc()"></td>
+                    <td><input type="number" class="metric-input" id="fudai-人工复杂" value="" placeholder="—" step="0.1" oninput="calc()"></td>
+                    <td><input type="number" class="metric-input" id="s0-人工复杂" value="" placeholder="—" step="0.1" oninput="calc()"></td>
+                    <td><input type="number" class="metric-input" id="s1-人工复杂" value="" placeholder="—" step="0.1" oninput="calc()"></td>
+                    <td>
+                        <div class="sub-pct-cell">
+                            <div class="sub-slider-wrap">
+                                <div class="sub-track-bg"></div>
+                                <div class="sub-track-fill bg-amber" id="subfill-人工复杂" style="width:33%"></div>
+                                <input type="range" class="sub-range sub-thumb-amber" id="sub-人工复杂" min="0" max="100" value="33" oninput="adjustSub('有人工介入', '人工复杂')">
+                            </div>
+                            <span class="sub-pct-val accent-amber" id="subval-人工复杂">33%</span>
+                        </div>
+                    </td>
+                    <td><span class="allpct-badge" id="allpct-人工复杂">—</span></td>
+                </tr>
+                <tr>
+                    <td>纯人工催收</td>
+                    <td><input type="number" class="metric-input" id="dpd30-纯人工" value="" placeholder="—" step="0.1" oninput="calc()"></td>
+                    <td><input type="number" class="metric-input" id="fudai-纯人工" value="" placeholder="—" step="0.1" oninput="calc()"></td>
+                    <td><input type="number" class="metric-input" id="s0-纯人工" value="" placeholder="—" step="0.1" oninput="calc()"></td>
+                    <td><input type="number" class="metric-input" id="s1-纯人工" value="" placeholder="—" step="0.1" oninput="calc()"></td>
+                    <td>
+                        <div class="sub-pct-cell">
+                            <div class="sub-slider-wrap">
+                                <div class="sub-track-bg"></div>
+                                <div class="sub-track-fill bg-amber" id="subfill-纯人工" style="width:34%"></div>
+                                <input type="range" class="sub-range sub-thumb-amber" id="sub-纯人工" min="0" max="100" value="34" oninput="adjustSub('有人工介入', '纯人工')">
+                            </div>
+                            <span class="sub-pct-val accent-amber" id="subval-纯人工">34%</span>
+                        </div>
+                    </td>
+                    <td><span class="allpct-badge" id="allpct-纯人工">—</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    </main>
+</div>
+
+
+<script>
+    const subActions = {
+        "不催":     ["不催1"],
+        "仅AI催":   ["AI轻度", "AI重度"],
+        "有人工介入": ["人工简单", "人工复杂", "纯人工"]
+    };
+
+    // ── 大组灰度调整（等比例分配其余两组）──
+    function adjustGroup(changedGroup) {
+        const groups = ["不催", "仅AI催", "有人工介入"];
+        const newVal = parseInt(document.getElementById("group-" + changedGroup).value);
+        const others = groups.filter(g => g !== changedGroup);
+
+        let totalOther = others.reduce((s, g) =>
+            s + parseInt(document.getElementById("group-" + g).value), 0);
+
+        const remaining = 100 - newVal;
+
+        if (totalOther === 0) {
+            const each = Math.floor(remaining / others.length);
+            others.forEach((g, i) => {
+                const v = i === others.length - 1 ? remaining - each * (others.length - 1) : each;
+                setGroup(g, v);
+            });
+        } else {
+            let assigned = 0;
+            others.forEach((g, i) => {
+                const cur = parseInt(document.getElementById("group-" + g).value);
+                let v;
+                if (i === others.length - 1) {
+                    v = remaining - assigned;
+                } else {
+                    v = Math.round(cur * remaining / totalOther);
+                    assigned += v;
+                }
+                setGroup(g, Math.max(0, v));
+            });
+        }
+
+        setGroup(changedGroup, newVal);
+        checkTotal();
+        calc();
+    }
+
+    function setGroup(g, v) {
+        v = Math.max(0, Math.min(100, v));
+        document.getElementById("group-" + g).value = v;
+        document.getElementById("value-" + g).textContent = v + "%";
+        document.getElementById("fill-" + g).style.width = v + "%";
+        updateAllPct();
+    }
+
+    // ── 子行动组内占比调整（等比例）──
+    function adjustSub(groupName, changedSub) {
+        const subs = subActions[groupName];
+        const newVal = parseInt(document.getElementById("sub-" + changedSub).value);
+        const others = subs.filter(s => s !== changedSub);
+        const remaining = 100 - newVal;
+
+        let totalOther = others.reduce((s, sub) =>
+            s + parseInt(document.getElementById("sub-" + sub).value), 0);
+
+        if (totalOther === 0) {
+            const each = Math.floor(remaining / others.length);
+            others.forEach((sub, i) => {
+                const v = i === others.length - 1 ? remaining - each * (others.length - 1) : each;
+                setSub(sub, Math.max(0, v));
+            });
+        } else {
+            let assigned = 0;
+            others.forEach((sub, i) => {
+                const cur = parseInt(document.getElementById("sub-" + sub).value);
+                let v;
+                if (i === others.length - 1) {
+                    v = remaining - assigned;
+                } else {
+                    v = Math.round(cur * remaining / totalOther);
+                    assigned += v;
+                }
+                setSub(sub, Math.max(0, v));
+            });
+        }
+
+        setSub(changedSub, newVal);
+        calc();
+    }
+
+    function setSub(sub, v) {
+        v = Math.max(0, Math.min(100, v));
+        document.getElementById("sub-" + sub).value = v;
+        document.getElementById("subval-" + sub).textContent = v + "%";
+        document.getElementById("subfill-" + sub).style.width = v + "%";
+        updateAllPct();
+    }
+
+    // ── 全量占比 = 组内占比 × 大组灰度 ──
+    const subToGroup = {
+        "不催1": "不催",
+        "AI轻度": "仅AI催", "AI重度": "仅AI催",
+        "人工简单": "有人工介入", "人工复杂": "有人工介入", "纯人工": "有人工介入"
+    };
+
+    function updateAllPct() {
+        for (const sub in subToGroup) {
+            const groupName = subToGroup[sub];
+            const groupPct = parseInt(document.getElementById("group-" + groupName).value);
+            const subPct   = parseInt(document.getElementById("sub-" + sub).value);
+            const all = (groupPct * subPct / 100).toFixed(1);
+            document.getElementById("allpct-" + sub).textContent = all + "%";
+        }
+    }
+
+    // ── 总灰度校验 ──
+    function checkTotal() {
+        const total = ["不催", "仅AI催", "有人工介入"].reduce((s, g) =>
+            s + parseInt(document.getElementById("group-" + g).value), 0);
+        const badge = document.getElementById("total-badge");
+        if (total === 100) {
+            badge.textContent = "总灰度 100% ✓";
+            badge.className = "total-badge";
+        } else {
+            badge.textContent = "总灰度 " + total + "% ✗";
+            badge.className = "total-badge invalid";
+        }
+    }
+
+    // ── 加权计算 ──
+    function calc() {
+        const groupWeights = {
+            "不催":     parseInt(document.getElementById("group-不催").value),
+            "仅AI催":   parseInt(document.getElementById("group-仅AI催").value),
+            "有人工介入": parseInt(document.getElementById("group-有人工介入").value)
+        };
+
+        let totalDpd30 = 0, totalFudai = 0, totalS0 = 0, totalS1 = 0;
+        let totalWeight = 0;
+        let allEmpty = { dpd30: true, fudai: true, s0: true, s1: true };
+
+        for (const groupName in subActions) {
+            const subs = subActions[groupName];
+            let gDpd = 0, gFud = 0, gS0 = 0, gS1 = 0, gW = 0;
+
+            subs.forEach(sub => {
+                const w = parseInt(document.getElementById("sub-" + sub).value);
+                const dpd = parseFloat(document.getElementById("dpd30-" + sub).value);
+                const fud = parseFloat(document.getElementById("fudai-" + sub).value);
+                const s0  = parseFloat(document.getElementById("s0-" + sub).value);
+                const s1  = parseFloat(document.getElementById("s1-" + sub).value);
+
+                if (!isNaN(dpd)) { gDpd += w * dpd; allEmpty.dpd30 = false; }
+                if (!isNaN(fud)) { gFud += w * fud; allEmpty.fudai = false; }
+                if (!isNaN(s0))  { gS0  += w * s0;  allEmpty.s0    = false; }
+                if (!isNaN(s1))  { gS1  += w * s1;  allEmpty.s1    = false; }
+                gW += w;
+            });
+
+            if (gW > 0) {
+                const gw = groupWeights[groupName];
+                totalDpd30 += gw * gDpd / gW;
+                totalFudai += gw * gFud / gW;
+                totalS0    += gw * gS0  / gW;
+                totalS1    += gw * gS1  / gW;
+                totalWeight += gw;
+            }
+        }
+
+        function fmt(key, raw, isPercent) {
+            if (allEmpty[key] || totalWeight === 0) return "—" + (isPercent ? '<span class="mc-unit">%</span>' : "");
+            const v = (raw / totalWeight).toFixed(2);
+            return v + (isPercent ? '<span class="mc-unit">%</span>' : "");
+        }
+
+        document.getElementById("result-dpd30").innerHTML = fmt("dpd30", totalDpd30, true);
+        document.getElementById("result-fudai").innerHTML = fmt("fudai", totalFudai, true);
+        document.getElementById("result-s0").innerHTML    = fmt("s0",    totalS0,    false);
+        document.getElementById("result-s1").innerHTML    = fmt("s1",    totalS1,    false);
+    }
+
+    // 初始化
+    checkTotal();
+    updateAllPct();
+    calc();
+</script>
+</body>
+</html>
